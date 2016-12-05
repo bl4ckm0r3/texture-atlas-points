@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+</head>
+<body>
+	<script src="http://threejs.org/build/three.min.js"></script>
+<script src="http://threejs.org/examples/js/controls/OrbitControls.js"></script>
+
+<script type="x-shader/x-vertex" id="vertexshader">
+
+attribute vec2 offset;
+
+varying vec2 vOffset;
+
+void main() {
+
+    vOffset = offset;
+
+	gl_PointSize = 100.0;
+
+	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+}
+
+</script>
+
+<script type="x-shader/x-fragment" id="fragmentshader">
+
+uniform sampler2D texture;
+uniform vec2 repeat;
+
+varying vec2 vOffset;
+
+void main() {
+
+    vec2 uv = vec2( gl_PointCoord.x, 1.0 - gl_PointCoord.y );
+
+    vec4 tex = texture2D( texture, uv * repeat + vOffset );
+    
+    if ( tex.a < 0.5 ) discard;
+
+    gl_FragColor = tex;
+
+}
+
+</script>
+<script type="text/javascript">
+	var renderer, scene, camera, controls;
+var pointCloud, uniforms, attributes;
+
+init();
+animate();
+
+function init() {
+
+    // renderer
+    renderer = new THREE.WebGLRenderer();
+    renderer.setClearColor( 0x000000, 1 );
+    renderer.setSize( window.innerWidth, window.innerHeight );
+    document.body.appendChild( renderer.domElement );
+    
+    // scene
+    scene = new THREE.Scene();
+
+    //camera
+    camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 50000 );
+    camera.position.z = 400;
+
+    // controls
+    controls = new THREE.OrbitControls( camera, renderer.domElement );
+
+    // vertices
+    var geometry = new THREE.SphereGeometry( 100, 20, 20 );
+    geometry.mergeVertices(); // to remove duplicate vertices at the poles
+    var vertices = geometry.vertices;
+
+    // geometry
+    geometry = new THREE.BufferGeometry();
+ 
+    // attributes
+    numVertices = vertices.length;
+    var positions = new Float32Array( numVertices * 3 ); // 3 coordinates per point
+    var offsets = new Float32Array( numVertices * 2 ); // 2 coordinates per point
+
+    geometry.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+    geometry.addAttribute( 'offset', new THREE.BufferAttribute( offsets, 2 ) );
+
+    // populate positions
+    geometry.attributes.position.copyVector3sArray( vertices );
+
+    // populate offsets
+    var offset = new THREE.Vector2();
+
+    for ( var i = 0, index = 0, l = numVertices; i < l; i ++, index += 2 ) {
+
+        offset.set( `0.${THREE.Math.randInt( 0, 9 )}`, `0.${THREE.Math.randInt( 0, 9 )}` );
+        // offset.set(0.9, 0);
+        offsets[ index ] = offset.x;
+        offsets[ index + 1 ] = offset.y;
+
+    }
+
+	// image
+    image = document.createElement( 'img' );
+    image.addEventListener( 'load', function ( event ) { texture.needsUpdate = true; } );
+
+    // texture
+    var texture = new THREE.Texture( image );
+    // uniforms
+    uniforms = {
+
+        texture:    { value: texture },
+        repeat:     { value: new THREE.Vector2( 0.1, 0.1) }
+
+    };
+
+    // attributes
+    attributes = {
+
+        offset: { type: 'v2', value: [] },
+
+    };
+
+    // material
+    var material = new THREE.ShaderMaterial( {
+
+        uniforms:       uniforms,
+        vertexShader:   document.getElementById( 'vertexshader' ).textContent,
+        fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
+        transparent:    true
+
+    } );
+
+    // point cloud
+    pointCloud = new THREE.Points( geometry, material );
+
+    scene.add( pointCloud );
+
+}
+
+function animate() {
+
+    requestAnimationFrame( animate );
+
+    pointCloud.rotation.y += 0.001;
+
+    render();
+
+}
+
+function render() {
+
+    renderer.render( scene, camera );
+
+}
+
+
+image.src = (() => {
+	const canvas = document.createElement('canvas');
+	const context = canvas.getContext('2d');
+	const w = 1024;
+	const h = 1024;
+	const rows = 10;
+	const columns = 10;
+	canvas.width = w;
+	canvas.height = h;
+	context.textAlign="center";
+	context.font="50px Gibson";
+	context.fillStyle = 'red';
+	const colors = ['orange', 'red']
+	const lineWidth = 12;
+	for (let i = 0; i < rows; i++) {
+		for (let j = 0; j < columns; j++) {
+			context.strokeStyle = colors[j%2];
+			context.lineWidth = lineWidth;
+			const rect = {
+				x: j * w/columns + lineWidth /2,
+				y: i * h/rows + lineWidth /2,
+				w: w/columns - lineWidth ,
+				h: h/rows - lineWidth ,
+			} 
+			context.strokeRect(rect.x, rect.y, rect.w, rect.h );
+			context.fillText(`${i}-${j}`,rect.x + 46, rect.y + 60);
+		}
+	}
+	
+  return canvas.toDataURL("image/webp");
+})();
+</script>
+</body>
+</html>
